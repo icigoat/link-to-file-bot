@@ -23,7 +23,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
+gen_session.py
 # Virtual Environment
 v/
 venv/
