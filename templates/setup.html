@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Required</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .setup-box {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            max-width: 600px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="setup-box">
+        <h1>⚙️ Setup Required</h1>
+        <p>Please set the <code>CHANNEL_ID</code> environment variable in your Render dashboard.</p>
+        <p><strong>Steps:</strong></p>
+        <ol>
+            <li>Go to your Render dashboard</li>
+            <li>Select your service</li>
+            <li>Go to "Environment" tab</li>
+            <li>Add: <code>CHANNEL_ID</code> = <code>@yourchannel</code> or <code>-1001234567890</code></li>
+            <li>Save and redeploy</li>
+        </ol>
+        <div class="warning">
+            <strong>Note:</strong> Use your channel username (e.g., @mychannel) or numeric ID (e.g., -1001234567890)
+        </div>
+    </div>
+</body>
+</html>

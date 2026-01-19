@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .error-box {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            max-width: 600px;
+            text-align: center;
+        }
+        
+        h1 {
+            color: #dc3545;
+            margin-bottom: 20px;
+            font-size: 48px;
+        }
+        
+        h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        p {
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .error-details {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #dc3545;
+            word-break: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-box">
+        <h1>❌</h1>
+        <h2>Oops! Something went wrong</h2>
+        <p>We encountered an error while loading the files.</p>
+        <div class="error-details">{{ error }}</div>
+    </div>
+</body>
+</html>
