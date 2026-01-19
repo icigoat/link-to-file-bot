@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: telegram-streaming-proxy
+    env: python
+    # Upgrade to paid tier for better performance with large files
+    # plan: starter  # Uncomment for $7/month plan (recommended for 3GB+ files)
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 300
+    envVars:
+      - key: TG_API_ID
+        sync: false
+      - key: TG_API_HASH
+        sync: false
+      - key: TG_SESSION_STRING
+        sync: false
+      - key: PORT
+        value: 10000
