@@ -23,7 +23,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-gen_session.py
+
 # Virtual Environment
 v/
 venv/
@@ -46,3 +46,19 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Helper scripts (don't commit to repo)
+generate_session.py
+gen_session.py
+find_channel.py
+get_ids.py
+generate_icons.py
+create_icons.html
+
+# Documentation (keep locally, don't commit)
+PWA_SETUP.md
+SPEED_OPTIMIZATION.md
+SETUP_CHANNEL.md
+PERFORMANCE.md
+GITHUB_PUSH.md
+RENDER_DEPLOY.md

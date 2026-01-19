@@ -4,6 +4,7 @@ from typing import AsyncGenerator, List, Dict
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 from pyrogram import Client
 from pyrogram.errors import RPCError
 from pyrogram.types import Message
@@ -31,6 +32,9 @@ if not all([API_ID, API_HASH, SESSION_STRING]):
 
 # Initialize FastAPI
 app = FastAPI(title="Telegram File Browser")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Setup templates
 templates = Jinja2Templates(directory="templates")
@@ -118,6 +122,128 @@ async def root(request: Request):
         })
 
 
+@app.get("/recent", response_class=HTMLResponse)
+async def recent(request: Request):
+    """Recent downloads page"""
+    return templates.TemplateResponse("recent.html", {"request": request})
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings(request: Request):
+    """Settings page"""
+    channel_id = CHANNEL_ID if CHANNEL_ID else None
+    total_files = 0
+    
+    if channel_id:
+        try:
+            channel_id = int(channel_id)
+        except (ValueError, TypeError):
+            pass
+        
+        try:
+            async for message in client.get_chat_history(channel_id, limit=100):
+                if message.media:
+                    total_files += 1
+        except:
+            pass
+    
+    return templates.TemplateResponse("settings.html", {
+        "request": request,
+        "total_files": total_files
+    })
+
+
+@app.get("/stream/{chat_id}/{message_id}")
+async def stream_media(chat_id: int, message_id: int, request: Request):
+    """Stream media with range request support for better performance"""
+    try:
+        # Convert chat_id to int if needed
+        try:
+            chat_id = int(chat_id)
+        except (ValueError, TypeError):
+            pass
+        
+        # Fetch the message
+        message = await client.get_messages(chat_id, message_id)
+        
+        if not message or not message.media:
+            raise HTTPException(status_code=404, detail="Message or media not found")
+        
+        # Get file info
+        file_name = "file"
+        file_size = 0
+        mime_type = "application/octet-stream"
+        
+        if message.video:
+            file_name = message.video.file_name or f"video_{message_id}.mp4"
+            file_size = message.video.file_size
+            mime_type = message.video.mime_type or "video/mp4"
+        elif message.audio:
+            file_name = message.audio.file_name or f"audio_{message_id}.mp3"
+            file_size = message.audio.file_size
+            mime_type = message.audio.mime_type or "audio/mpeg"
+        elif message.photo:
+            file_name = f"photo_{message_id}.jpg"
+            file_size = message.photo.file_size
+            mime_type = "image/jpeg"
+        elif message.document:
+            file_name = message.document.file_name or f"document_{message_id}"
+            file_size = message.document.file_size
+            mime_type = message.document.mime_type or "application/octet-stream"
+        
+        # Handle range requests for better streaming
+        range_header = request.headers.get("range")
+        
+        if range_header:
+            # Parse range header
+            range_match = range_header.replace("bytes=", "").split("-")
+            start = int(range_match[0]) if range_match[0] else 0
+            end = int(range_match[1]) if len(range_match) > 1 and range_match[1] else file_size - 1
+            
+            # Stream specific range
+            async def stream_range():
+                offset = start
+                chunk_size = 1024 * 1024  # 1MB chunks
+                async for chunk in client.stream_media(message, offset=offset, limit=end - start + 1):
+                    yield chunk
+            
+            headers = {
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(end - start + 1),
+                "Content-Type": mime_type,
+                "Cache-Control": "public, max-age=3600"
+            }
+            
+            return StreamingResponse(
+                stream_range(),
+                status_code=206,
+                headers=headers,
+                media_type=mime_type
+            )
+        else:
+            # Stream entire file
+            headers = {
+                "Content-Disposition": f'inline; filename="{file_name}"',
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(file_size),
+                "Content-Type": mime_type,
+                "Cache-Control": "public, max-age=3600"
+            }
+            
+            return StreamingResponse(
+                stream_file(chat_id, message_id),
+                headers=headers,
+                media_type=mime_type
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error streaming media: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/thumbnail/{chat_id}/{message_id}")
 async def get_thumbnail(chat_id: int, message_id: int):
     """Get thumbnail for a message"""
@@ -203,6 +329,7 @@ def extract_file_info(message: Message, channel_id: str) -> Dict:
         "date": message.date.strftime("%Y-%m-%d %H:%M") if message.date else "Unknown",
         "caption": message.caption or "",
         "has_thumbnail": False,
+        "can_stream": False,
     }
     
     if message.document:
@@ -212,7 +339,11 @@ def extract_file_info(message: Message, channel_id: str) -> Dict:
             "size_bytes": message.document.file_size,
             "type": message.document.mime_type or "application/octet-stream",
             "icon": get_file_icon(message.document.mime_type),
-            "has_thumbnail": bool(message.document.thumbs)
+            "has_thumbnail": bool(message.document.thumbs),
+            "can_stream": message.document.mime_type and (
+                message.document.mime_type.startswith("video/") or 
+                message.document.mime_type.startswith("audio/")
+            )
         })
     elif message.video:
         file_info.update({
@@ -221,7 +352,8 @@ def extract_file_info(message: Message, channel_id: str) -> Dict:
             "size_bytes": message.video.file_size,
             "type": "video/mp4",
             "icon": "🎥",
-            "has_thumbnail": bool(message.video.thumbs)
+            "has_thumbnail": bool(message.video.thumbs),
+            "can_stream": True
         })
     elif message.audio:
         file_info.update({
@@ -230,7 +362,8 @@ def extract_file_info(message: Message, channel_id: str) -> Dict:
             "size_bytes": message.audio.file_size,
             "type": "audio/mpeg",
             "icon": "🎵",
-            "has_thumbnail": bool(message.audio.thumbs) if hasattr(message.audio, 'thumbs') else False
+            "has_thumbnail": bool(message.audio.thumbs) if hasattr(message.audio, 'thumbs') else False,
+            "can_stream": True
         })
     elif message.photo:
         file_info.update({
@@ -239,7 +372,8 @@ def extract_file_info(message: Message, channel_id: str) -> Dict:
             "size_bytes": message.photo.file_size,
             "type": "image/jpeg",
             "icon": "🖼️",
-            "has_thumbnail": True
+            "has_thumbnail": True,
+            "can_stream": True
         })
     elif message.voice:
         file_info.update({
@@ -248,7 +382,8 @@ def extract_file_info(message: Message, channel_id: str) -> Dict:
             "size_bytes": message.voice.file_size,
             "type": "audio/ogg",
             "icon": "🎤",
-            "has_thumbnail": False
+            "has_thumbnail": False,
+            "can_stream": True
         })
     elif message.animation:
         file_info.update({
@@ -257,13 +392,15 @@ def extract_file_info(message: Message, channel_id: str) -> Dict:
             "size_bytes": message.animation.file_size,
             "type": "video/mp4",
             "icon": "🎬",
-            "has_thumbnail": bool(message.animation.thumbs)
+            "has_thumbnail": bool(message.animation.thumbs),
+            "can_stream": True
         })
     else:
         return None
     
-    # Generate download URL
+    # Generate URLs
     file_info["download_url"] = f"/dl/{channel_id}/{message.id}"
+    file_info["stream_url"] = f"/stream/{channel_id}/{message.id}"
     
     # Generate thumbnail URL if available
     if file_info["has_thumbnail"]:

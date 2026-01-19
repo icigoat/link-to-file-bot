@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recent - Telegram File Browser</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1419;
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+            padding-bottom: 100px;
+        }
+        .container { max-width: 500px; margin: 0 auto; }
+        .header { padding: 20px 0; }
+        .header h1 { font-size: 32px; margin-bottom: 10px; }
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            margin-top: 40px;
+        }
+        .empty-icon { font-size: 64px; margin-bottom: 20px; }
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15, 20, 25, 0.95);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 12px 0;
+        }
+        .nav-items {
+            display: flex;
+            justify-content: space-around;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: rgba(255, 255, 255, 0.5);
+            text-decoration: none;
+            font-size: 12px;
+        }
+        .nav-item.active { color: #667eea; }
+        .nav-icon { font-size: 24px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🕐 Recent Downloads</h1>
+        </div>
+        <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <h2>No recent downloads</h2>
+            <p style="color: rgba(255,255,255,0.5); margin-top: 10px;">Your download history will appear here</p>
+        </div>
+    </div>
+    
+    <div class="bottom-nav">
+        <div class="nav-items">
+            <a href="/" class="nav-item">
+                <div class="nav-icon">📁</div>
+                <div>Browse</div>
+            </a>
+            <a href="/recent" class="nav-item active">
+                <div class="nav-icon">🕐</div>
+                <div>Recent</div>
+            </a>
+            <a href="/settings" class="nav-item">
+                <div class="nav-icon">⚙️</div>
+                <div>Settings</div>
+            </a>
+        </div>
+    </div>
+</body>
+</html>
