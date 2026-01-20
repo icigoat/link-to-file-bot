@@ -4,12 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#667eea">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Telegram File Browser</title>
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="/static/manifest.json">
+    
+    <!-- Plyr.js CSS -->
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
     
     <!-- GSAP -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
@@ -17,6 +20,16 @@
     
     <!-- Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Plyr.js -->
+    <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+    
+    <!-- HLS.js for better streaming -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    
+    <!-- FFmpeg WebAssembly for on-the-fly conversion -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
     
     <style>
         * {
@@ -50,11 +63,9 @@
             display: block;
         }
         
-        /* Animated particles - removed, using Three.js instead */
-        
         .container {
             position: relative;
-            z-index: 2;
+            z-index: 10;
             max-width: 500px;
             margin: 0 auto;
             padding: 20px;
@@ -107,7 +118,7 @@
             color: rgba(255, 255, 255, 0.6);
         }
         
-        /* File Cards */
+        /* File Cards with 3D Effects */
         .files-list {
             display: flex;
             flex-direction: column;
@@ -122,6 +133,28 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
             transition: transform 0.3s ease;
+            transform-style: preserve-3d;
+            perspective: 1000px;
+            position: relative;
+            z-index: 5;
+            cursor: pointer;
+        }
+        
+        .file-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1;
+        }
+        
+        .file-card:hover::before {
+            opacity: 1;
         }
         
         .file-thumbnail {
@@ -133,6 +166,28 @@
             justify-content: center;
             position: relative;
             overflow: hidden;
+        }
+        
+        .file-thumbnail::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><filter id="ripple"><feTurbulence baseFrequency="0.02" numOctaves="3" result="noise"/><feDisplacementMap in="SourceGraphic" in2="noise" scale="5"/></filter></defs><rect width="100" height="100" fill="rgba(102,126,234,0.1)" filter="url(%23ripple)"/></svg>') center/cover;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .file-thumbnail:hover::before {
+            opacity: 1;
+            animation: rippleWave 2s ease-in-out infinite;
+        }
+        
+        @keyframes rippleWave {
+            0%, 100% { transform: scale(1) rotate(0deg); }
+            50% { transform: scale(1.05) rotate(2deg); }
         }
         
         .file-thumbnail img {
@@ -154,6 +209,8 @@
         
         .file-content {
             padding: 20px;
+            position: relative;
+            z-index: 2;
         }
         
         .file-name {
@@ -189,6 +246,8 @@
         .file-actions {
             display: flex;
             gap: 10px;
+            position: relative;
+            z-index: 20;
         }
         
         .btn {
@@ -206,11 +265,33 @@
             transition: all 0.3s ease;
             text-decoration: none;
             color: white;
+            position: relative;
+            z-index: 21;
+            pointer-events: auto;
+            overflow: hidden;
         }
         
         .btn-stream {
             background: linear-gradient(135deg, #667eea, #764ba2);
             box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-stream::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-stream:hover::before {
+            width: 200px;
+            height: 200px;
         }
         
         .btn-download {
@@ -222,7 +303,23 @@
             transform: scale(0.95);
         }
         
-        /* Modal for streaming */
+        /* Glassmorphism Spotlight */
+        .spotlight {
+            position: fixed;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, rgba(102, 126, 234, 0.25) 0%, rgba(118, 75, 162, 0.15) 30%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: -1;
+            mix-blend-mode: screen;
+            transition: opacity 0.3s ease;
+            opacity: 0;
+            transform: translate(-50%, -50%);
+            filter: blur(1px);
+        }
+        
+        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -329,32 +426,14 @@
         .nav-icon {
             font-size: 24px;
         }
-        
-        /* Loading */
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: rgba(255, 255, 255, 0.5);
-        }
-        
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 16px;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
     </style>
 </head>
 <body>
     <!-- 3D Background -->
     <div id="three-bg"></div>
+    
+    <!-- Glassmorphism Spotlight -->
+    <div class="spotlight" id="spotlight"></div>
     
     <div class="container">
         <div class="header">
@@ -366,6 +445,15 @@
                 <span class="stat-value">{{ total_files }}</span>
                 <span class="stat-label">Total Files</span>
             </div>
+            
+            <div style="font-size: 10px; opacity: 0.5; margin-top: 10px;">
+                v2.4 - NUCLEAR CACHE BUST (Incognito) - {{ timestamp }}
+            </div>
+            
+            <!-- Debug button for testing -->
+            <button onclick="testStreaming()" style="margin-top: 10px; padding: 8px 16px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 12px;">
+                🔧 Test Streaming
+            </button>
         </div>
         
         <div class="files-list">
@@ -385,12 +473,10 @@
                         <span class="file-date">{{ file.date }}</span>
                     </div>
                     <div class="file-actions">
-                        {% if file.can_stream %}
                         <button class="btn btn-stream" onclick="openStream('{{ file.stream_url }}', '{{ file.name }}', '{{ file.type }}')">
                             <span>▶️</span>
                             <span>Stream</span>
                         </button>
-                        {% endif %}
                         <a href="{{ file.download_url }}" class="btn btn-download" download>
                             <span>⬇️</span>
                             <span>Download</span>
@@ -432,6 +518,624 @@
     </div>
     
     <script>
+        // ========================================
+        // NUCLEAR CACHE BUST VERSION CHECK
+        // ========================================
+        
+        const VERSION = '2.4-NUCLEAR-CACHE-BUST-INCOGNITO-' + Date.now();
+        console.log('🚀 Telegram File Browser', VERSION);
+        console.log('✅ NUCLEAR CACHE BUST - INCOGNITO MODE ACTIVE');
+        console.log('🔄 Cache-busting timestamp:', Date.now());
+        console.log('🚫 WILL NEVER USE /proxy/ ENDPOINT');
+        console.log('✅ FORCED TO USE /raw-stream/ ENDPOINT ONLY');
+        console.log('🎯 This should work in incognito mode!');
+        
+        // ========================================
+        // Global Functions (Must be first for onclick handlers)
+        // ========================================
+        
+        let currentPlayer = null;
+        let ffmpeg = null;
+        
+        // Initialize FFmpeg WebAssembly
+        async function initFFmpeg() {
+            if (!ffmpeg) {
+                try {
+                    // Check if FFmpeg is available
+                    if (typeof FFmpeg === 'undefined') {
+                        throw new Error('FFmpeg WebAssembly library not loaded');
+                    }
+                    
+                    const { FFmpeg } = FFmpeg;
+                    const { fetchFile, toBlobURL } = FFmpegUtil;
+                    
+                    ffmpeg = new FFmpeg();
+                    
+                    // Set up logging
+                    ffmpeg.on('log', ({ message }) => {
+                        console.log('FFmpeg:', message);
+                    });
+                    
+                    ffmpeg.on('progress', ({ progress }) => {
+                        const progressBar = document.getElementById('conversion-progress');
+                        if (progressBar) {
+                            progressBar.style.width = `${40 + (progress * 40)}%`;
+                        }
+                    });
+                    
+                    // Load FFmpeg with correct URLs
+                    const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+                    await ffmpeg.load({
+                        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+                        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+                        workerURL: await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript'),
+                    });
+                    
+                    console.log('FFmpeg loaded successfully');
+                } catch (error) {
+                    console.error('FFmpeg load failed:', error);
+                    ffmpeg = null;
+                    throw error;
+                }
+            }
+            return ffmpeg;
+        }
+        
+        function openStream(url, name, type) {
+            console.log('🚀 Opening stream with NUCLEAR CACHE BUST:', url, name, type);
+            
+            // Check if using external streamer
+            const isExternalStreamer = url.includes('://') && !url.includes('localhost');
+            
+            if (isExternalStreamer) {
+                console.log('⚡ Using EXTERNAL TG FILE STREAMER for optimal performance!');
+                console.log('🎯 External streamer URL:', url);
+                
+                // Add visual indicator for external streamer
+                const indicator = document.createElement('div');
+                indicator.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #FF6B35; color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; z-index: 9999; font-family: monospace;';
+                indicator.textContent = '⚡ External Streamer';
+                document.body.appendChild(indicator);
+                setTimeout(() => indicator.remove(), 4000);
+            } else {
+                console.log('🏠 Using LOCAL streaming');
+                
+                // Add visual indicator for local streaming
+                const indicator = document.createElement('div');
+                indicator.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #4CAF50; color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; z-index: 9999; font-family: monospace;';
+                indicator.textContent = '🏠 Local Stream';
+                document.body.appendChild(indicator);
+                setTimeout(() => indicator.remove(), 3000);
+            }
+            
+            const modal = document.getElementById('streamModal');
+            const player = document.getElementById('mediaPlayer');
+            const title = document.getElementById('modalTitle');
+            
+            title.textContent = name;
+            modal.classList.add('active');
+            
+            // Destroy existing player
+            if (currentPlayer) {
+                currentPlayer.destroy();
+                currentPlayer = null;
+            }
+            
+            // Check if it's a streamable format
+            const isH264 = type.includes('mp4') && !type.includes('matroska');
+            const isWebM = type.includes('webm');
+            const isStreamable = isH264 || isWebM || type.startsWith('audio/') || type.startsWith('image/');
+            const isMKV = type.includes('matroska') || type.includes('mkv') || name.toLowerCase().endsWith('.mkv');
+            
+            if (isMKV || !isStreamable) {
+                // Show advanced options for non-streamable formats
+                const streamUrl = url.replace('/stream/', '/proxy/');
+                player.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <div style="font-size: 60px; margin-bottom: 20px;">🎬</div>
+                        <h3 style="margin-bottom: 15px; color: #667eea;">${name}</h3>
+                        <p style="margin-bottom: 20px; opacity: 0.7;">This video format requires special handling for web playback.</p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 15px; max-width: 400px; margin: 0 auto;">
+                            <!-- External Player Option -->
+                            <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);">
+                                <h4 style="margin-bottom: 10px; color: #667eea;">🚀 External Player (Recommended)</h4>
+                                <p style="font-size: 14px; opacity: 0.7; margin-bottom: 15px;">Open in VLC, MX Player, or your default video player</p>
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+                                    <button onclick="openInVLC('${streamUrl}', '${name}')" class="btn btn-stream" style="flex: none; padding: 12px 16px;">
+                                        🎯 VLC Player
+                                    </button>
+                                    <button onclick="openInMXPlayer('${streamUrl}', '${name}')" class="btn btn-stream" style="flex: none; padding: 12px 16px;">
+                                        📱 MX Player
+                                    </button>
+                                    <button onclick="openInDefaultPlayer('${streamUrl}', '${name}')" class="btn btn-stream" style="flex: none; padding: 12px 16px;">
+                                        🎮 Default Player
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Browser Conversion Option -->
+                            <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);">
+                                <h4 style="margin-bottom: 10px; color: #764ba2;">🔮 Convert & Play in Browser</h4>
+                                <p style="font-size: 14px; opacity: 0.7; margin-bottom: 15px;">Convert to web-compatible format using WebAssembly</p>
+                                <button onclick="convertAndPlay('${streamUrl}', '${name}', '${type}')" class="btn btn-download" style="width: 100%;">
+                                    ⚡ Convert & Stream
+                                </button>
+                                <p style="font-size: 12px; opacity: 0.5; margin-top: 10px;">Note: May take time for large files</p>
+                            </div>
+                            
+                            <!-- Download Option -->
+                            <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);">
+                                <h4 style="margin-bottom: 10px; color: #ff6b6b;">💾 Download</h4>
+                                <p style="font-size: 14px; opacity: 0.7; margin-bottom: 15px;">Download to watch later</p>
+                                <a href="${url.replace('/stream/', '/dl/')}" download class="btn btn-download" style="width: 100%;">
+                                    ⬇️ Download Video
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Use Plyr.js for streamable content - FORCE RAW-STREAM ONLY
+                console.log('🎬 Using Plyr.js with FORCED raw-stream for:', type);
+                
+                // FORCE raw-stream endpoint - NEVER use proxy
+                let rawStreamUrl = url;
+                if (url.includes('/stream/')) {
+                    rawStreamUrl = url.replace('/stream/', '/raw-stream/');
+                } else if (url.includes('/proxy/')) {
+                    rawStreamUrl = url.replace('/proxy/', '/raw-stream/');
+                }
+                
+                console.log('🚀 FORCED Stream URL being used:', rawStreamUrl);
+                console.log('🚫 NEVER using /proxy/ endpoint');
+                
+                // Add visual indicator
+                const indicator = document.createElement('div');
+                indicator.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #4CAF50; color: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; z-index: 9999; font-family: monospace;';
+                indicator.textContent = '✅ Using /raw-stream/';
+                document.body.appendChild(indicator);
+                setTimeout(() => indicator.remove(), 3000);
+                
+                if (type.startsWith('video/')) {
+                    player.innerHTML = `
+                        <video 
+                            id="plyr-video" 
+                            class="plyr-video" 
+                            controls 
+                            crossorigin 
+                            playsinline
+                            style="width: 100%; max-height: 70vh;"
+                        >
+                            <source src="${url}" type="${type}">
+                            <p>Your browser doesn't support video playback.</p>
+                        </video>
+                    `;
+                    
+                    // Initialize Plyr with optimized options for faster loading
+                    const videoElement = document.getElementById('plyr-video');
+                    currentPlayer = new Plyr(videoElement, {
+                        controls: [
+                            'play-large',
+                            'play',
+                            'progress', 
+                            'current-time',
+                            'duration',
+                            'mute',
+                            'volume',
+                            'settings',
+                            'fullscreen'
+                        ],
+                        settings: ['quality', 'speed'],
+                        quality: {
+                            default: 720,
+                            options: [1080, 720, 480, 360]
+                        },
+                        speed: {
+                            selected: 1,
+                            options: [0.5, 0.75, 1, 1.25, 1.5, 2]
+                        },
+                        tooltips: { controls: true, seek: true },
+                        keyboard: { focused: true, global: true },
+                        fullscreen: { enabled: true, fallback: true, iosNative: true },
+                        storage: { enabled: true, key: 'plyr' },
+                        // Optimizations for faster loading
+                        preload: 'metadata', // Load metadata first, then buffer as needed
+                        autopause: false,
+                        resetOnEnd: false
+                    });
+                    
+                    // Optimize video element for streaming
+                    videoElement.preload = 'metadata';
+                    videoElement.crossOrigin = 'anonymous';
+                    
+                    // Add loading optimization
+                    videoElement.addEventListener('loadstart', () => {
+                        console.log('🚀 Video loading started');
+                        title.textContent = `Loading ${name}...`;
+                    });
+                    
+                    videoElement.addEventListener('loadedmetadata', () => {
+                        console.log('✅ Video metadata loaded');
+                        title.textContent = `Ready: ${name}`;
+                    });
+                    
+                    videoElement.addEventListener('canplay', () => {
+                        console.log('✅ Video can start playing');
+                        title.textContent = name;
+                    });
+                    
+                    // Add event listeners
+                    currentPlayer.on('ready', () => {
+                        console.log('Plyr ready');
+                        title.textContent = name;
+                    });
+                    
+                    currentPlayer.on('loadstart', () => {
+                        console.log('Loading started');
+                        title.textContent = `Loading ${name}...`;
+                    });
+                    
+                    currentPlayer.on('error', (event) => {
+                        console.error('Plyr error:', event);
+                        player.innerHTML = `
+                            <div style="text-align: center; padding: 40px; color: #ff6b6b;">
+                                <p style="margin-bottom: 20px;">⚠️ Video playback failed</p>
+                                <p style="margin-bottom: 20px; font-size: 14px; opacity: 0.7;">
+                                    The video might be corrupted, too large, or in an incompatible format.
+                                </p>
+                                <a href="${url.replace('/stream/', '/dl/')}" download class="btn btn-download" style="display: inline-flex;">
+                                    <span>⬇️</span>
+                                    <span>Download Instead</span>
+                                </a>
+                            </div>
+                        `;
+                    });
+                    
+                } else if (type.startsWith('audio/')) {
+                    player.innerHTML = `
+                        <audio 
+                            id="plyr-audio" 
+                            class="plyr-audio" 
+                            controls 
+                            crossorigin
+                            style="width: 100%;"
+                        >
+                            <source src="${url}" type="${type}">
+                            <p>Your browser doesn't support audio playback.</p>
+                        </audio>
+                    `;
+                    
+                    // Initialize Plyr for audio
+                    const audioElement = document.getElementById('plyr-audio');
+                    currentPlayer = new Plyr(audioElement, {
+                        controls: [
+                            'play',
+                            'progress',
+                            'current-time',
+                            'duration',
+                            'mute',
+                            'volume',
+                            'settings'
+                        ],
+                        settings: ['speed'],
+                        speed: {
+                            selected: 1,
+                            options: [0.5, 0.75, 1, 1.25, 1.5, 2]
+                        }
+                    });
+                    
+                    currentPlayer.on('ready', () => {
+                        console.log('Audio Plyr ready');
+                        title.textContent = name;
+                    });
+                    
+                } else if (type.startsWith('image/')) {
+                    player.innerHTML = `
+                        <div style="text-align: center;">
+                            <img src="${url}" alt="${name}" style="width: 100%; max-height: 70vh; object-fit: contain; border-radius: 8px;">
+                        </div>
+                    `;
+                }
+            }
+            
+            // Animate modal
+            gsap.from('.modal-content', {
+                scale: 0.8,
+                opacity: 0,
+                duration: 0.3,
+                ease: 'back.out'
+            });
+        }
+        
+        // Deep Link Functions for External Players
+        function openInVLC(url, name) {
+            // Use current server's proxy endpoint for better performance
+            const streamUrl = url.replace('/stream/', '/proxy/');
+            const vlcUrl = `vlc://${window.location.origin}${streamUrl}`;
+            
+            // Try to open VLC directly
+            window.location.href = vlcUrl;
+            
+            // Fallback: show instructions
+            setTimeout(() => {
+                const fullUrl = `${window.location.origin}${streamUrl}`;
+                alert(`If VLC didn't open automatically:\n\n1. Copy this URL: ${fullUrl}\n2. Open VLC Media Player\n3. Go to Media > Open Network Stream\n4. Paste the URL and click Play\n\n🚀 This URL supports range requests for fast seeking!`);
+            }, 2000);
+        }
+        
+        function openInMXPlayer(url, name) {
+            // Use current server's proxy endpoint
+            const streamUrl = url.replace('/stream/', '/proxy/');
+            const fullUrl = `${window.location.origin}${streamUrl}`;
+            const mxUrl = `intent:${fullUrl}#Intent;package=com.mxtech.videoplayer.ad;end`;
+            
+            // Try to open MX Player
+            window.location.href = mxUrl;
+            
+            // Fallback
+            setTimeout(() => {
+                alert(`If MX Player didn't open:\n\n1. Install MX Player from Play Store\n2. Copy this URL: ${fullUrl}\n3. Open MX Player > Network > Add URL\n\n⚡ This URL supports fast seeking and buffering!`);
+            }, 2000);
+        }
+        
+        function openInDefaultPlayer(url, name) {
+            // Use current server's proxy endpoint
+            const streamUrl = url.replace('/stream/', '/proxy/');
+            const fullUrl = `${window.location.origin}${streamUrl}`;
+            const link = document.createElement('a');
+            link.href = fullUrl;
+            link.target = '_blank';
+            link.download = name;
+            link.click();
+            
+            alert(`Opening in default player...\n\nURL: ${fullUrl}\n\nIf it doesn't work:\n1. Right-click the link\n2. Choose "Open with..." \n3. Select your preferred video player\n\n🎯 This URL is optimized for external players!`);
+        }
+        
+        // WebAssembly Conversion Function
+        async function convertAndPlay(url, name, type) {
+            const player = document.getElementById('mediaPlayer');
+            const title = document.getElementById('modalTitle');
+            
+            try {
+                title.textContent = `Converting ${name}...`;
+                player.innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <div style="font-size: 40px; margin-bottom: 20px;">⚡</div>
+                        <h3 style="margin-bottom: 15px;">Converting Video...</h3>
+                        <div style="width: 100%; background: rgba(255,255,255,0.1); border-radius: 10px; overflow: hidden; margin-bottom: 20px;">
+                            <div id="conversion-progress" style="width: 0%; height: 20px; background: linear-gradient(135deg, #667eea, #764ba2); transition: width 0.3s;"></div>
+                        </div>
+                        <p id="conversion-status" style="opacity: 0.7; font-size: 14px;">Initializing FFmpeg...</p>
+                        <button onclick="closeStream()" style="margin-top: 20px; padding: 10px 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer;">
+                            Cancel
+                        </button>
+                    </div>
+                `;
+                
+                // Check file size first
+                const response = await fetch(url, { method: 'HEAD' });
+                const fileSize = parseInt(response.headers.get('content-length') || '0');
+                
+                if (fileSize > 50 * 1024 * 1024) { // 50MB limit for browser conversion
+                    throw new Error('File too large for browser conversion (>50MB). Please use VLC or download instead.');
+                }
+                
+                // Update status
+                document.getElementById('conversion-status').textContent = 'Loading FFmpeg WebAssembly...';
+                document.getElementById('conversion-progress').style.width = '5%';
+                
+                // Initialize FFmpeg
+                await initFFmpeg();
+                
+                if (!ffmpeg) {
+                    throw new Error('FFmpeg WebAssembly failed to load. Your browser may not support this feature.');
+                }
+                
+                // Update progress
+                document.getElementById('conversion-status').textContent = 'Downloading video file...';
+                document.getElementById('conversion-progress').style.width = '15%';
+                
+                // Fetch the video file
+                const videoResponse = await fetch(url);
+                if (!videoResponse.ok) {
+                    throw new Error(`Failed to download video: ${videoResponse.status} ${videoResponse.statusText}`);
+                }
+                
+                const arrayBuffer = await videoResponse.arrayBuffer();
+                const inputData = new Uint8Array(arrayBuffer);
+                
+                // Update progress
+                document.getElementById('conversion-status').textContent = 'Preparing conversion...';
+                document.getElementById('conversion-progress').style.width = '25%';
+                
+                // Write input file
+                await ffmpeg.writeFile('input.mkv', inputData);
+                
+                // Update progress
+                document.getElementById('conversion-status').textContent = 'Converting to MP4 (this may take a while)...';
+                document.getElementById('conversion-progress').style.width = '35%';
+                
+                // Convert with optimized settings for web playback
+                await ffmpeg.exec([
+                    '-i', 'input.mkv',
+                    '-c:v', 'libx264',
+                    '-preset', 'ultrafast',
+                    '-crf', '28',
+                    '-c:a', 'aac',
+                    '-ac', '2',
+                    '-ar', '44100',
+                    '-movflags', '+faststart',
+                    '-f', 'mp4',
+                    'output.mp4'
+                ]);
+                
+                // Update progress
+                document.getElementById('conversion-status').textContent = 'Finalizing...';
+                document.getElementById('conversion-progress').style.width = '90%';
+                
+                // Read output file
+                const outputData = await ffmpeg.readFile('output.mp4');
+                
+                // Create blob URL
+                const blob = new Blob([outputData.buffer], { type: 'video/mp4' });
+                const convertedUrl = URL.createObjectURL(blob);
+                
+                // Update progress
+                document.getElementById('conversion-progress').style.width = '100%';
+                
+                // Clean up FFmpeg files
+                try {
+                    await ffmpeg.deleteFile('input.mkv');
+                    await ffmpeg.deleteFile('output.mp4');
+                } catch (e) {
+                    console.warn('Failed to clean up FFmpeg files:', e);
+                }
+                
+                // Play converted video
+                title.textContent = name;
+                player.innerHTML = `
+                    <video 
+                        id="plyr-converted" 
+                        class="plyr-video" 
+                        controls 
+                        autoplay
+                        style="width: 100%; max-height: 70vh;"
+                    >
+                        <source src="${convertedUrl}" type="video/mp4">
+                    </video>
+                `;
+                
+                // Initialize Plyr for converted video
+                const videoElement = document.getElementById('plyr-converted');
+                currentPlayer = new Plyr(videoElement, {
+                    controls: [
+                        'play-large', 'play', 'progress', 'current-time', 'duration',
+                        'mute', 'volume', 'settings', 'fullscreen'
+                    ]
+                });
+                
+                currentPlayer.on('ready', () => {
+                    console.log('Converted video ready');
+                });
+                
+            } catch (error) {
+                console.error('Conversion failed:', error);
+                
+                let errorMessage = error.message;
+                let suggestions = [];
+                
+                if (error.message.includes('FFmpeg WebAssembly failed to load')) {
+                    suggestions.push('Try using a modern browser (Chrome, Firefox, Safari)');
+                    suggestions.push('Check if JavaScript is enabled');
+                } else if (error.message.includes('File too large')) {
+                    suggestions.push('Use VLC Player for large files');
+                    suggestions.push('Download the file to watch locally');
+                } else if (error.message.includes('Failed to download')) {
+                    suggestions.push('Check your internet connection');
+                    suggestions.push('Try refreshing the page');
+                } else {
+                    suggestions.push('VLC Player can play MKV files perfectly');
+                    suggestions.push('Try downloading the file instead');
+                }
+                
+                player.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #ff6b6b;">
+                        <p style="margin-bottom: 20px;">⚠️ Conversion failed</p>
+                        <p style="margin-bottom: 20px; font-size: 14px; opacity: 0.7;">
+                            ${errorMessage}
+                        </p>
+                        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px;">
+                            <button onclick="openInVLC('${url}', '${name}')" class="btn btn-stream" style="flex: none;">
+                                🎯 Try VLC Instead
+                            </button>
+                            <a href="${url.replace('/stream/', '/dl/')}" download class="btn btn-download" style="flex: none;">
+                                ⬇️ Download
+                            </a>
+                        </div>
+                        <div style="font-size: 12px; opacity: 0.6; text-align: left; max-width: 400px; margin: 0 auto;">
+                            <p style="margin-bottom: 10px;"><strong>💡 Suggestions:</strong></p>
+                            ${suggestions.map(s => `<p style="margin-bottom: 5px;">• ${s}</p>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        function closeStream() {
+            const modal = document.getElementById('streamModal');
+            const player = document.getElementById('mediaPlayer');
+            
+            // Destroy Plyr instance
+            if (currentPlayer) {
+                currentPlayer.destroy();
+                currentPlayer = null;
+            }
+            
+            // Clean up any blob URLs
+            const videos = player.querySelectorAll('video');
+            videos.forEach(video => {
+                if (video.src && video.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(video.src);
+                }
+            });
+            
+            gsap.to('.modal-content', {
+                scale: 0.8,
+                opacity: 0,
+                duration: 0.2,
+                onComplete: () => {
+                    modal.classList.remove('active');
+                    player.innerHTML = '';
+                }
+            });
+        }
+        
+        function testStreaming() {
+            console.log('Testing streaming functionality...');
+            
+            // Get first file card to test with
+            const firstCard = document.querySelector('.file-card');
+            if (!firstCard) {
+                alert('No files found to test with');
+                return;
+            }
+            
+            const streamBtn = firstCard.querySelector('.btn-stream');
+            if (!streamBtn) {
+                alert('No streamable files found');
+                return;
+            }
+            
+            // Extract URL from onclick
+            const onclick = streamBtn.getAttribute('onclick');
+            const urlMatch = onclick.match(/openStream\('([^']+)'/);
+            
+            if (!urlMatch) {
+                alert('Could not extract stream URL');
+                return;
+            }
+            
+            const streamUrl = urlMatch[1];
+            console.log('Testing stream URL:', streamUrl);
+            
+            // Test the stream endpoint
+            fetch(streamUrl.replace('/stream/', '/test-stream/'))
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Stream test result:', data);
+                    if (data.success) {
+                        alert(`✅ Streaming test passed!\n\nFile: ${data.media_info.file_name || 'Unknown'}\nType: ${data.media_info.type}\nSize: ${data.media_info.file_size} bytes`);
+                    } else {
+                        alert(`❌ Streaming test failed!\n\nError: ${data.error}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Stream test error:', error);
+                    alert(`❌ Streaming test failed!\n\nError: ${error.message}`);
+                });
+        }
+        
         // ========================================
         // Three.js Interactive 3D Scene
         // ========================================
@@ -572,51 +1276,6 @@
             camera.position.x = mouse.x * 5;
             camera.position.y = mouse.y * 5;
             camera.lookAt(scene.position);
-            
-            // Check for hover on folders
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(folders, true);
-            
-            // Reset all folders
-            folders.forEach(folder => {
-                gsap.to(folder.scale, {
-                    x: 1,
-                    y: 1,
-                    z: 1,
-                    duration: 0.3
-                });
-                folder.children.forEach(child => {
-                    if (child.material) {
-                        gsap.to(child.material, {
-                            emissiveIntensity: 0.2,
-                            duration: 0.3
-                        });
-                    }
-                });
-            });
-            
-            // Highlight hovered folder
-            if (intersects.length > 0) {
-                const hoveredFolder = intersects[0].object.parent;
-                gsap.to(hoveredFolder.scale, {
-                    x: 1.3,
-                    y: 1.3,
-                    z: 1.3,
-                    duration: 0.3,
-                    ease: 'back.out'
-                });
-                hoveredFolder.children.forEach(child => {
-                    if (child.material) {
-                        gsap.to(child.material, {
-                            emissiveIntensity: 0.8,
-                            duration: 0.3
-                        });
-                    }
-                });
-                document.body.style.cursor = 'pointer';
-            } else {
-                document.body.style.cursor = 'default';
-            }
         }
         
         function onMouseClick(event) {
@@ -643,13 +1302,6 @@
                             ease: 'elastic.out'
                         });
                     }
-                });
-                
-                // Spin animation
-                gsap.to(clickedFolder.rotation, {
-                    x: clickedFolder.rotation.x + Math.PI * 2,
-                    y: clickedFolder.rotation.y + Math.PI * 2,
-                    duration: 0.5
                 });
             }
         }
@@ -683,120 +1335,130 @@
             renderer.render(scene, camera);
         }
         
-        // Initialize Three.js
-        initThreeJS();
+        // ========================================
+        // GSAP Animations with Advanced Effects
+        // ========================================
         
-        // ========================================
-        // PWA & Other Scripts
-        // ========================================
-        // Register Service Worker for PWA
+        gsap.registerPlugin(ScrollTrigger);
+        
+        // Initialize everything when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize Three.js
+            initThreeJS();
+            
+            // Staggered Entrance Animation
+            gsap.set('.file-card', { y: 100, opacity: 0, rotationX: -15 });
+            
+            gsap.to('.file-card', {
+                y: 0,
+                opacity: 1,
+                rotationX: 0,
+                duration: 0.8,
+                stagger: {
+                    amount: 1.2,
+                    from: "start",
+                    ease: "back.out(1.7)"
+                },
+                ease: "back.out(1.7)",
+                delay: 0.5
+            });
+            
+            // Perspective Tilt Effect on File Cards
+            document.querySelectorAll('.file-card').forEach(card => {
+                card.addEventListener('mousemove', (e) => {
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    
+                    const rotateX = (y - centerY) / centerY * -10;
+                    const rotateY = (x - centerX) / centerX * 10;
+                    
+                    gsap.to(card, {
+                        duration: 0.3,
+                        rotationX: rotateX,
+                        rotationY: rotateY,
+                        transformPerspective: 1000,
+                        ease: "power2.out"
+                    });
+                });
+                
+                card.addEventListener('mouseleave', () => {
+                    gsap.to(card, {
+                        duration: 0.5,
+                        rotationX: 0,
+                        rotationY: 0,
+                        ease: "elastic.out(1, 0.3)"
+                    });
+                });
+            });
+            
+            // Enhanced Button Effects
+            document.querySelectorAll('.btn-stream').forEach(button => {
+                button.addEventListener('mouseenter', (e) => {
+                    gsap.to(button, {
+                        duration: 0.3,
+                        scale: 1.05,
+                        ease: "power2.out"
+                    });
+                });
+                
+                button.addEventListener('mouseleave', () => {
+                    gsap.to(button, {
+                        duration: 0.3,
+                        scale: 1,
+                        ease: "power2.out"
+                    });
+                });
+            });
+            
+            // Spotlight Effect
+            document.querySelectorAll('.file-card').forEach(card => {
+                card.addEventListener('mouseenter', () => {
+                    const spotlight = document.getElementById('spotlight');
+                    gsap.to(spotlight, {
+                        duration: 0.3,
+                        opacity: 0.5,
+                        ease: "power2.out"
+                    });
+                });
+                
+                card.addEventListener('mouseleave', () => {
+                    const spotlight = document.getElementById('spotlight');
+                    gsap.to(spotlight, {
+                        duration: 0.5,
+                        opacity: 0,
+                        ease: "power2.out"
+                    });
+                });
+            });
+            
+            // Animate header
+            gsap.from('.header', {
+                y: -100,
+                opacity: 0,
+                duration: 1.2,
+                ease: 'bounce.out',
+                delay: 0.2
+            });
+            
+            // Close modal on background click
+            const modal = document.getElementById('streamModal');
+            modal.addEventListener('click', (e) => {
+                if (e.target.id === 'streamModal') {
+                    closeStream();
+                }
+            });
+        });
+        
+        // PWA Service Worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/static/sw.js')
                 .then(reg => console.log('SW registered', reg))
                 .catch(err => console.log('SW error', err));
         }
-        
-        // Create animated particles
-        function createParticles() {
-            const container = document.getElementById('particles');
-            for (let i = 0; i < 20; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'particle';
-                particle.style.left = Math.random() * 100 + '%';
-                particle.style.top = Math.random() * 100 + '%';
-                particle.style.animationDelay = Math.random() * 10 + 's';
-                particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
-                container.appendChild(particle);
-            }
-        }
-        createParticles();
-        
-        // GSAP Animations
-        gsap.registerPlugin(ScrollTrigger);
-        
-        // Animate file cards on scroll
-        gsap.utils.toArray('.file-card').forEach((card, i) => {
-            gsap.from(card, {
-                scrollTrigger: {
-                    trigger: card,
-                    start: 'top bottom-=100',
-                    toggleActions: 'play none none reverse'
-                },
-                y: 50,
-                opacity: 0,
-                duration: 0.6,
-                delay: i * 0.1
-            });
-        });
-        
-        // Animate header
-        gsap.from('.header', {
-            y: -50,
-            opacity: 0,
-            duration: 1,
-            ease: 'power3.out'
-        });
-        
-        // Stream functionality
-        function openStream(url, name, type) {
-            const modal = document.getElementById('streamModal');
-            const player = document.getElementById('mediaPlayer');
-            const title = document.getElementById('modalTitle');
-            
-            title.textContent = name;
-            
-            let mediaElement;
-            if (type.startsWith('video/')) {
-                mediaElement = `<video controls autoplay class="media-player"><source src="${url}" type="${type}"></video>`;
-            } else if (type.startsWith('audio/')) {
-                mediaElement = `<audio controls autoplay class="media-player"><source src="${url}" type="${type}"></audio>`;
-            } else if (type.startsWith('image/')) {
-                mediaElement = `<img src="${url}" alt="${name}" class="media-player">`;
-            }
-            
-            player.innerHTML = mediaElement;
-            modal.classList.add('active');
-            
-            // Animate modal
-            gsap.from('.modal-content', {
-                scale: 0.8,
-                opacity: 0,
-                duration: 0.3,
-                ease: 'back.out'
-            });
-        }
-        
-        function closeStream() {
-            const modal = document.getElementById('streamModal');
-            const player = document.getElementById('mediaPlayer');
-            
-            gsap.to('.modal-content', {
-                scale: 0.8,
-                opacity: 0,
-                duration: 0.2,
-                onComplete: () => {
-                    modal.classList.remove('active');
-                    player.innerHTML = '';
-                }
-            });
-        }
-        
-        // Close modal on background click
-        document.getElementById('streamModal').addEventListener('click', (e) => {
-            if (e.target.id === 'streamModal') {
-                closeStream();
-            }
-        });
-        
-        // Add hover effects to buttons
-        document.querySelectorAll('.btn').forEach(btn => {
-            btn.addEventListener('mouseenter', function() {
-                gsap.to(this, { scale: 1.05, duration: 0.2 });
-            });
-            btn.addEventListener('mouseleave', function() {
-                gsap.to(this, { scale: 1, duration: 0.2 });
-            });
-        });
     </script>
 </body>
 </html>
